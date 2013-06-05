@@ -154,6 +154,25 @@ class Matrix(object):
 
         return self.data == other.data
 
+    def trace(self):
+        """Returns the sum of diagonal elements for a square matrix.  Denoted tr A
+
+        >>> x = Matrix(2,2, data=[1,5,20,40])
+        >>> x.trace()
+        41
+        >>> x = Matrix(1,1, data=[5])
+        >>> x.trace()
+        5
+        >>> x = Matrix(1,2, data=[5,8])
+        >>> x.trace()
+        Traceback (most recent call last):
+        ValueError: Trace undefined for non-square matrices
+        """
+        if self.rows != self.columns:
+            raise ValueError("Trace undefined for non-square matrices")
+
+        return reduce(lambda x,y: x + y, [self.data[self.columns * i + i] for i in range(self.rows)])
+
     def is_row_echelon(self):
         """Returns true iff this matrix is in row echelon format.
 
