@@ -28,14 +28,22 @@ class Matrix(object):
     """
 
     def __init__(self, rows = 0, columns = 0, data = []):
-        self.rows = rows
-        self.columns = columns
+        self._rows = rows
+        self._columns = columns
         self._rank = -1
 
         if data:
             self.data = data[:]
         else:
             self.data = [0] * rows * columns
+
+    @property
+    def columns(self):
+        return self._columns
+
+    @property
+    def rows(self):
+        return self._rows
 
     def size(self):
         return (self.rows, self.columns)
@@ -51,6 +59,17 @@ class Matrix(object):
         [1, 4]
         """
         return [self.data[ self.columns * row + (i - 1)] for row in range(self.rows)]
+
+    def entry(self, i, j):
+        """Entry; returns the ith-jth entry of this matrix (1 based)
+
+        >>> x = Matrix(2,3, data = [1,2,3,4,5,6])
+        >>> x.entry(1,3)
+        3
+        >>> x.entry(2,2)
+        5
+        """
+        return self.data[self.columns * (i - 1) + j - 1]
 
     def transpose(self):
         """Returns a new matrix that is the transpose of self
@@ -173,6 +192,45 @@ class Matrix(object):
 
         return reduce(lambda x,y: x + y, [self.data[self.columns * i + i] for i in range(self.rows)])
 
+    def is_identity(self):
+        """Returns true if this is the identity matrix
+
+        >>> x = Matrix(2,2, data = [1,0,0,1])
+        >>> x.is_identity()
+        True
+        >>> x = Matrix(2,2, data = [1,3,0,1])
+        >>> x.is_identity()
+        False
+        """
+
+        if self.rows != self.columns:
+            return False
+
+        for i in range(self.rows):
+            row = self.row(i + 1)
+            for j in range(self.columns):
+                if i == j and row[j] != 1:
+                    return False
+
+                if i != j and row[j] != 0:
+                    return False
+
+        return True;
+
+    def is_inverse(self, other):
+        """Returns true iff other is the inverse of self.  That is, if A = self, and B = other, then AB = I and BA = I.
+
+        >>> A = Matrix(2,2, data = [0, 1, 1, 1])
+        >>> B = Matrix(2,2, data = [-1, 1, 1, 0])
+        >>> A.is_inverse(B)
+        True
+        >>> A = Matrix(2,2, data = [0, 1, 1, 1])
+        >>> B = Matrix(2,2, data = [-10, 5, 1, 0])
+        >>> A.is_inverse(B)
+        False
+        """
+        return (self * other).is_identity() and (other * self).is_identity()
+
     def is_row_echelon(self):
         """Returns true iff this matrix is in row echelon format.
 
@@ -241,85 +299,174 @@ class Matrix(object):
 
         return True
 
-    def to_reduced_row_echelon(self, augment = {}):
-        """Apply the Gaussian Algorithm to produce a matrix in row echelon form
+    def interchange(self, p, q):
+        """Elementary row operation: interchange row p with row q.
+
+        >>> x = Matrix(2,2, data = [1, 2, 3, 4])
+        >>> x.interchange(1,2)
+        >>> x.row(1)
+        [3, 4]
+        >>> x.row(2)
+        [1, 2]
+        """
+        # Nothing to do if p == q
+        if p == q:
+            return
+
+        tmp = self.data[self.columns * (p - 1):self.columns * p]
+        self.data[self.columns * (p - 1):self.columns * p] = self.data[self.columns * (q - 1):self.columns * q]
+        self.data[self.columns * (q - 1):self.columns * q] = tmp
+
+    def multiply(self, p, c):
+        """Elementary row operation: multiple row p by scalar c (c != 0)
+
+        >>> x = Matrix(2, 2, data = [1,2,3,4])
+        >>> x.multiply(2, 10)
+        >>> x.row(2)
+        [30, 40]
+        >>> x.multiply(2, 0)
+        Traceback (most recent call last):
+        ValueError: Invalid constant == 0
+        """
+        if c == 0:
+            raise ValueError("Invalid constant == 0")
+
+        for x in range(self.columns * (p - 1), self.columns * p):
+            self.data[x] *= c
+
+    def add(self, p, q, k):
+        """Elementary row operation: add k times row p to row q (p != q)
+
+        >>> x = Matrix(2,2, data = [1,2,3,4])
+        >>> x.add(1, 2, 5)
+        >>> x.row(2)
+        [8, 14]
+        """
+        if p == q:
+            raise ValueError("Invalid target; p == q")
+
+        for x in range(self.columns):
+            self.data[self.columns * (q - 1) + x] += k * self.data[self.columns * (p - 1) + x]
+
+    def to_reduced_row_echelon(self):
+        """Apply the Gaussian Algorithm to produce a matrix in row echelon form.  Returns the resulting matrix and a list of
+        the elementary operations applied.
 
         >>> x = Matrix(4, 6, data = [0, 0, 0, 2, 1, 9, 0, -2, -6, 2, 0, 2, 0, 2, 6, -2, 2, 0, 0, 3, 9, 2, 2, 19])
         >>> x.is_row_echelon()
         False
         >>> x.is_reduced_row_echelon()
         False
-        >>> y = x.to_reduced_row_echelon()
+        >>> y, ops = x.to_reduced_row_echelon()
         >>> y.is_row_echelon()
         True
         >>> y.is_reduced_row_echelon()
         True
         """
-        return self._to_row_echelon(fully_reduce = True, augment=augment)
+        return self._to_row_echelon(fully_reduce = True)
 
-    def to_row_echelon(self, augment = {}):
-        """Apply the Gaussian Algorithm to produce a matrix in row echelon form
+    def to_row_echelon(self):
+        """Apply the Gaussian Algorithm to produce a matrix in row echelon form.  Returns the resulting matrix and a list of
+        the elementary operations applied.
 
         >>> x = Matrix(4, 6, data = [0, 0, 0, 2, 1, 9, 0, -2, -6, 2, 0, 2, 0, 2, 6, -2, 2, 0, 0, 3, 9, 2, 2, 19])
         >>> x.is_row_echelon()
         False
-        >>> y = x.to_row_echelon()
+        >>> y, ops = x.to_row_echelon()
         >>> y.is_row_echelon()
         True
         """
-        return self._to_row_echelon(fully_reduce = False, augment=augment)
+        return self._to_row_echelon(fully_reduce = False)
 
-    def _to_row_echelon(self, fully_reduce = False, augment = {}):
+    def _to_row_echelon(self, fully_reduce = False):
 
-        row_idx = 0
-        data = self.data[:]
+        row_idx = 1
+        result = Matrix(self.rows, self.columns, data = self.data[:])
+        operations = []
 
-        for j in range(self.columns):
-            for i in range(row_idx, self.rows):
+        for j in range(1, self.columns + 1):
+            for i in range(row_idx, self.rows + 1):
 
                 # non zero entry
-                val = data[self.columns * i + j]
+                val = result.entry(i, j)
                 if val:
 
+                    # Interchange rows
                     if row_idx < i:
-                        row = data[self.columns * i : self.columns * (i + 1)]
-                        del data[self.columns * i : self.columns * (i + 1)]
-                        data = data[0:(self.columns * row_idx)] + row + data[self.columns * row_idx:]
+                        result.interchange(row_idx, i)
+                        operations.append((result.interchange.__name__, row_idx, i))
 
+                    # Simplify to leading 1
                     if val != 1:
-                        for k in range(self.columns):
-                            data[self.columns * row_idx + k] /= float(val)
+                        result.multiply(row_idx, 1 / float(val))
+                        operations.append((result.multiply.__name__, row_idx, 1 / float(val)))
 
                     # Reduce rows below
-                    for k in range(max(row_idx + 1, i), self.rows):
+                    for k in range(max(row_idx + 1, i), self.rows + 1):
                         # Only care about reducing non-zero columns
-                        if not data[self.columns * k + j]:
+                        multiple = result.entry(k, j)
+                        if not multiple:
                             continue;
 
-                        multiple = data[self.columns * k + j]
-                        for l in range(j, self.columns):
-                            data[self.columns * k + l] -= multiple * data[self.columns * row_idx + l]
+                        result.add(row_idx, k, -multiple)
+                        operations.append((result.add.__name__, row_idx, k, -multiple))
 
                     row_idx += 1
                     break;
 
         # Do back substitution if we are fully reducing
         if fully_reduce:
-            leading_row_idx = self.rows - 1
-            for j in range(self.columns - 1, -1, -1):
+            leading_row_idx = self.rows
+            for j in range(self.columns, 0, -1):
 
                 found_leading_one = False
-                for i in range(leading_row_idx, -1, -1):
-                    if (not found_leading_one) and data[self.columns * i + j] == 1:
+                for i in range(leading_row_idx, 0, -1):
+                    if (not found_leading_one) and result.entry(i, j) == 1:
                         found_leading_one = True
                         leading_row_idx = i
-                    elif found_leading_one and data[self.columns * i + j]:
-                        multiple = data[self.columns * i  + j]
+                    elif found_leading_one and result.entry(i, j):
+                        multiple = result.entry(i, j)
+                        result.add(leading_row_idx, i, -multiple)
+                        operations.append((result.add.__name__, leading_row_idx, i, -multiple))
 
-                        for k in range(j, self.columns):
-                            data[self.columns * i + k] -= multiple * data[self.columns * leading_row_idx + k]
+        return (result, operations)
 
-        return Matrix(self.rows, self.columns, data)
+    def invert(self):
+        """Matrix Inversion; attempt to find the inverted matrix, or 0 if self is not invertible.
+
+        >>> A = Matrix(3, 3, data = [2, 7, 1, 1, 4, -1, 1, 3, 0])
+        >>> B = A.invert()
+        >>> B.row(1)
+        [-1.5, -1.5, 5.5]
+        >>> B.row(2)
+        [0.5, 0.5, -1.5]
+        >>> B.row(3)
+        [0.5, -0.5, -0.5]
+        >>> C = A * B
+        >>> C.is_identity()
+        True
+        >>> C = B * A
+        >>> C.is_identity()
+        True
+        """
+
+        if self.rows != self.columns:
+            raise ValueError("Matrix must be square to invert")
+
+        A, operations = self.to_reduced_row_echelon()
+        if not A.is_identity():
+            return 0
+
+        # If A was reduced to the identity matrix, then the same set of operations will take I to the inverse of A.
+        #   [A I] -> [I A^(-1)]
+
+        I = IdentityMatrix(size = self.rows)
+        for operation in operations:
+            func = I.__getattribute__(operation[0])
+            args = operation[1:]
+            func(*args)
+
+        return I
 
     def rank(self):
         """Matrix rank; returns the number of leading 1's for the row echelon form of this matrix
@@ -335,7 +482,7 @@ class Matrix(object):
         if self._rank >= 0:
             return self._rank
 
-        reduced = self.to_row_echelon()
+        reduced, operations = self.to_row_echelon()
         non_leading_rows = 0
         for i in range(self.rows, 0, -1):
             if not reduce(lambda x,y: x or y, reduced.row(i)):
