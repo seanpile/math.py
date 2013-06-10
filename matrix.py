@@ -173,24 +173,6 @@ class Matrix(object):
 
         return self.data == other.data
 
-    def trace(self):
-        """Returns the sum of diagonal elements for a square matrix.  Denoted tr A
-
-        >>> x = Matrix(2,2, data=[1,5,20,40])
-        >>> x.trace()
-        41
-        >>> x = Matrix(1,1, data=[5])
-        >>> x.trace()
-        5
-        >>> x = Matrix(1,2, data=[5,8])
-        >>> x.trace()
-        Traceback (most recent call last):
-        ValueError: Trace undefined for non-square matrices
-        """
-        if self.rows != self.columns:
-            raise ValueError("Trace undefined for non-square matrices")
-
-        return reduce(lambda x,y: x + y, [self.data[self.columns * i + i] for i in range(self.rows)])
 
     def is_identity(self):
         """Returns true if this is the identity matrix
@@ -468,6 +450,50 @@ class Matrix(object):
 
         return I
 
+    def adjoint(self):
+        """Returns the adjoint of A; that is, the transpose of the coefficient matrix of A.
+
+        >>> A = Matrix(3, 3, data = [1, 3, -2,  0, 1, 5,  -2, -6, 7])
+        >>> adj = A.adjoint()
+        >>> adj.row(1)
+        [37, -9, 17]
+        >>> adj.row(2)
+        [-10, 3, -5]
+        >>> adj.row(3)
+        [2, 0, 1]
+        """
+        data = []
+        for i in range(1, self.rows + 1):
+            for j in range(1, self.columns + 1):
+                data.append(self._cofactor(i, j))
+
+        mat = Matrix(self.rows, self.columns, data)
+        return mat.transpose()
+
+    def _cofactor(self, i, j):
+        # Splice out row i and column j
+        data = [val for k, val in enumerate(self.data) if k / self.columns != i - 1 and k % self.columns != j - 1]
+        return (-1)**(i + j) * Matrix(self.rows - 1, self.rows - 1, data).det()
+
+    def trace(self):
+        """Returns the sum of diagonal elements for a square matrix.  Denoted tr A
+
+        >>> x = Matrix(2,2, data=[1,5,20,40])
+        >>> x.trace()
+        41
+        >>> x = Matrix(1,1, data=[5])
+        >>> x.trace()
+        5
+        >>> x = Matrix(1,2, data=[5,8])
+        >>> x.trace()
+        Traceback (most recent call last):
+        ValueError: Trace undefined for non-square matrices
+        """
+        if self.rows != self.columns:
+            raise ValueError("Trace undefined for non-square matrices")
+
+        return reduce(lambda x,y: x + y, [self.data[self.columns * i + i] for i in range(self.rows)])
+
     def rank(self):
         """Matrix rank; returns the number of leading 1's for the row echelon form of this matrix
 
@@ -492,6 +518,37 @@ class Matrix(object):
 
         self._rank = self.rows - non_leading_rows
         return self._rank
+
+    def det(self):
+        """Determinant (det A).  Returns the determinant of a square matrix using Laplace expansion
+
+        >>> A = Matrix(1,1, data = [3])
+        >>> A.det()
+        3
+        >>> A = Matrix(2,2, data = [3, 5, 2, 4])
+        >>> A.det()
+        2
+        >>> A = Matrix(3,3, data = [3, 4, 5, 1, 7, 2, 9, 8, -6])
+        >>> A.det()
+        -353
+        """
+
+        if self.rows != self.columns:
+            raise ValueError("Matrix must be square")
+
+        if self.rows == 1:
+            return self.row(1)[0]
+
+        if self.rows == 2:
+            return self.entry(1,1) * self.entry(2,2) - self.entry(1,2) * self.entry(2,1)
+
+        det = 0
+        row_to_expand = 1
+
+        for i in range(1, self.columns + 1):
+            det += self.entry(row_to_expand, i) * self._cofactor(row_to_expand, i)
+
+        return det
 
     def __repr__(self):
 
